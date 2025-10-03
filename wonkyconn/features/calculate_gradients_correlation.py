@@ -15,7 +15,6 @@ def remove_nan_from_matrix(matrix: np.ndarray) -> np.ndarray:
 
     # Apply masks
     cleaned_matrix = matrix[np.ix_(row_mask, col_mask)]
-    print("clean matrix", cleaned_matrix.shape)
 
     return cleaned_matrix
 
@@ -29,13 +28,21 @@ def remove_cerebellum_from_atlas(atlas: nib.Nifti1Image) -> nib.Nifti1Image:
         - nib.Nifti1Image: The atlas image with cerebellar regions removed.
     """
     atlas_data = atlas.get_fdata()
+    cerebellum_labels = np.arange(418, 435)
 
     # Identify cerebellar labels
-    cerebellum_labels = np.arange(418, 435)  # TODO Change this
     atlas_data_no_cerebellum = np.where(np.isin(atlas_data, cerebellum_labels), 0, atlas_data)
 
-    masked_atlas_img = nib.Nifti1Image(atlas_data_no_cerebellum, atlas.affine, atlas.header)
-    return masked_atlas_img
+    return nib.Nifti1Image(atlas_data_no_cerebellum, atlas.affine, atlas.header)
+
+
+def remove_cerebellum_from_matrix(conn_matrix: np.ndarray) -> np.ndarray:
+    """
+    Remove cerebellar from a connectivity matrix.
+    """
+    cerebellum_idx = np.arange(418, 435)
+    keep_idx = np.setdiff1d(np.arange(conn_matrix.shape[0]), cerebellum_idx)
+    return conn_matrix[np.ix_(keep_idx, keep_idx)]
 
 
 def mask_atlas_to_matrix(atlas: nib.Nifti1Image, conn_matrix: np.ndarray) -> tuple[nib.Nifti1Image, np.ndarray]:
@@ -109,13 +116,12 @@ def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[n
     ind_matrix = remove_nan_from_matrix(ind_matrix)
 
     # First remove the cerebellum
-    # TODO: use mask instead of removing by hand
+    # TODO: use a reference mask instead of removing by hand
     masked_atlas = remove_cerebellum_from_atlas(atlas)
+    ind_matrix = remove_cerebellum_from_matrix(ind_matrix)
 
-    # Then remove the region
+    # Then remove the region that do not overlap between atlas and matrix
     atlas_mask_without_nan, corr_matrix_masked = mask_atlas_to_matrix(masked_atlas, ind_matrix)
-    print(corr_matrix_masked.shape)
-
     masker = NiftiLabelsMasker(labels_img=atlas_mask_without_nan, standardize=False).fit()
 
     # Load all group gradient maps
