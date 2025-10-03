@@ -1,12 +1,13 @@
-import numpy as np
-import nibabel as nib
 import glob
 
-from scipy import stats
-
-from brainspace.gradient import GradientMaps  # type: ignore[import-not-found]
-from brainspace.gradient import alignment
+import nibabel as nib
+import numpy as np
+from brainspace.gradient import (
+    GradientMaps,  # type: ignore[import-not-found]
+    alignment,
+)
 from nilearn.maskers import NiftiLabelsMasker  # type: ignore[import-not-found]
+from scipy import stats
 
 
 def remove_nan_from_matrix(matrix: np.ndarray) -> np.ndarray:
