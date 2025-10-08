@@ -1,12 +1,11 @@
 import glob
+from typing import List, Tuple
 
 import nibabel as nib
 import numpy as np
 from brainspace.gradient import GradientMaps  # type: ignore[import-not-found]
 from nilearn.maskers import NiftiLabelsMasker  # type: ignore[import-not-found]
 from scipy import stats
-
-from typing import Tuple, List
 
 
 def remove_nan_from_matrix(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
