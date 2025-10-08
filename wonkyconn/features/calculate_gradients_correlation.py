@@ -88,12 +88,10 @@ def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[n
     gradient_files = sorted(glob.glob(f"{path_gradients}/templates/gradient*_cortical_subcortical.nii.gz"))
 
     group_gradients = []
-    print("before the loop")
     for fname in gradient_files:
         grad_img = nib.load(fname)
         grad_vals = masker.fit_transform(grad_img)  # shape (1, n_regions)
         group_gradients.append(grad_vals.squeeze())
-    print("after the loop")
 
     group_gradients_np = np.vstack(group_gradients).T  # shape (n_regions, n_components)
 
