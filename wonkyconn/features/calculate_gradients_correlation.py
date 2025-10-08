@@ -8,44 +8,26 @@ from brainspace.gradient import GradientMaps  # type: ignore[import-not-found]
 from brainspace.gradient import alignment
 from nilearn.maskers import NiftiLabelsMasker  # type: ignore[import-not-found]
 
+from typing import Tuple, List
 
-def remove_nan_from_matrix(matrix: np.ndarray) -> np.ndarray:
+
+def remove_nan_from_matrix(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     col_mask = ~np.all(np.isnan(matrix), axis=0)
-    row_mask = ~np.all(np.isnan(matrix), axis=1)
 
-    # Apply masks
-    cleaned_matrix = matrix[np.ix_(row_mask, col_mask)]
+    kept_idx = np.where(col_mask)[0]
+    removed_idx = np.where(~col_mask)[0]
+    conn_clean = matrix[np.ix_(kept_idx, kept_idx)]
 
-    return cleaned_matrix
+    return conn_clean, kept_idx, removed_idx
 
 
-def remove_cerebellum_from_atlas(atlas: nib.Nifti1Image) -> nib.Nifti1Image:
+def overlapping_mask(subject_atlas: nib.Nifti1Image, group_mask: nib.Nifti1Image, matrix: np.ndarray) -> nib.Nifti1Image:
     """
-    Remove cerebellar regions from an atlas.
-    Parameters:
-        - atlas (nib.Nifti1Image): The original atlas image.
-    Returns:
-        - nib.Nifti1Image: The atlas image with cerebellar regions removed.
+    TODO: not used yet, will be implemented in the future or align atlas with gradient mask
     """
-    atlas_data = atlas.get_fdata()
-    cerebellum_labels = np.arange(418, 435)
-
-    # Identify cerebellar labels
-    atlas_data_no_cerebellum = np.where(np.isin(atlas_data, cerebellum_labels), 0, atlas_data)
-
-    return nib.Nifti1Image(atlas_data_no_cerebellum, atlas.affine, atlas.header)
 
 
-def remove_cerebellum_from_matrix(conn_matrix: np.ndarray) -> np.ndarray:
-    """
-    Remove cerebellar from a connectivity matrix.
-    """
-    cerebellum_idx = np.arange(418, 435)
-    keep_idx = np.setdiff1d(np.arange(conn_matrix.shape[0]), cerebellum_idx)
-    return conn_matrix[np.ix_(keep_idx, keep_idx)]
-
-
-def mask_atlas_to_matrix(atlas: nib.Nifti1Image, conn_matrix: np.ndarray) -> tuple[nib.Nifti1Image, np.ndarray]:
+def mask_atlas_to_matrix(atlas: nib.Nifti1Image, kept_idx: np.ndarray) -> tuple[nib.Nifti1Image, np.ndarray]:
     """
     Remove ROIs from an atlas that are not present in a connectivity matrix.
 
@@ -67,34 +49,17 @@ def mask_atlas_to_matrix(atlas: nib.Nifti1Image, conn_matrix: np.ndarray) -> tup
     # Load atlas
     atlas_data = atlas.get_fdata()
 
-    labels_original = np.unique(atlas_data)
-    labels_original = labels_original[labels_original > 0]
+    roi_labels = sorted([int(x) for x in np.unique(atlas_data) if x != 0])
 
-    # Determine which labels to keep based on matrix size
-    n_rois_matrix = conn_matrix.shape[0]
-    labels_to_keep = labels_original[:n_rois_matrix]
+    # Now remove labels that were removed from the conn matrix
+    kept_labels = [roi_labels[i] for i in kept_idx]
 
-    # Mask atlas
-    atlas_data_masked = np.where(np.isin(atlas_data, labels_to_keep), atlas_data, 0)
-
-    # Create new NIfTI
-    atlas_mask_without_nan = nib.Nifti1Image(atlas_data_masked, atlas.affine, atlas.header)
-
-    # Remove region with non overlap in matrix
-    labels_original = np.unique(atlas_mask_without_nan.get_fdata().astype(int))
-    labels_masked = np.unique(atlas_data_masked)
-
-    labels_original = labels_original[labels_original > 0]
-    labels_masked = labels_masked[labels_masked > 0]
-
-    missing_labels = set(labels_original) - set(labels_masked)
-    missing = sorted(list(missing_labels))
-
-    # Drop rows/cols
-    corr_matrix_masked = np.delete(conn_matrix, missing, axis=0)
-    corr_matrix_masked = np.delete(corr_matrix_masked, missing, axis=1)
-
-    return atlas_mask_without_nan, corr_matrix_masked
+    # Make a mask image that keeps only kept_labels
+    keep_mask = np.isin(atlas_data, kept_labels)
+    kept_atlas_data = atlas_data.copy()
+    kept_atlas_data[~keep_mask] = 0
+    kept_atlas_img = nib.Nifti1Image(kept_atlas_data, atlas.affine, atlas.header)
+    return kept_atlas_img
 
 
 def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[np.ndarray, np.ndarray]:
@@ -113,31 +78,28 @@ def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[n
     path_gradients = "wonkyconn/data/gradients"
 
     # Remove NaN from matrix
-    ind_matrix = remove_nan_from_matrix(ind_matrix)
-
-    # First remove the cerebellum
-    # TODO: use a reference mask instead of removing by hand
-    masked_atlas = remove_cerebellum_from_atlas(atlas)
-    ind_matrix = remove_cerebellum_from_matrix(ind_matrix)
+    conn_clean, kept_idx, removed_idx = remove_nan_from_matrix(ind_matrix)
 
     # Then remove the region that do not overlap between atlas and matrix
-    atlas_mask_without_nan, corr_matrix_masked = mask_atlas_to_matrix(masked_atlas, ind_matrix)
-    masker = NiftiLabelsMasker(labels_img=atlas_mask_without_nan, standardize=False).fit()
+    atlas_mask_without_nan = mask_atlas_to_matrix(atlas, kept_idx)
+    masker = NiftiLabelsMasker(labels_img=atlas_mask_without_nan, standardize=False)
 
     # Load all group gradient maps
     gradient_files = sorted(glob.glob(f"{path_gradients}/templates/gradient*_cortical_subcortical.nii.gz"))
 
     group_gradients = []
+    print("before the loop")
     for fname in gradient_files:
         grad_img = nib.load(fname)
-        grad_vals = masker.transform(grad_img)  # shape (1, n_regions)
+        grad_vals = masker.fit_transform(grad_img)  # shape (1, n_regions)
         group_gradients.append(grad_vals.squeeze())
+    print("after the loop")
 
     group_gradients_np = np.vstack(group_gradients).T  # shape (n_regions, n_components)
 
     # Compute individual gradients
     gm = GradientMaps(n_components=5)
-    ind_gradient = gm.fit(corr_matrix_masked)
+    ind_gradient = gm.fit(conn_clean)
 
     # align (Procrustes)
     ind_aligned_gradient = alignment.procrustes(ind_gradient.gradients_, group_gradients_np)
@@ -148,7 +110,8 @@ def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[n
 def calculate_gradients_similarity(ind_aligned_gradient: np.ndarray, group_gradients: np.ndarray) -> float:
     """
     Calculate the Spearman's correlation between the individual gradients and the reference
-    group-level gradients from Margulies et al., 2016.
+    group-level gradients from Margulies et al., 2016. Then apply Fishers R-to-Z transformation
+    and average across all gradient components.
 
     Parameters:
     - ind_aligned_gradient (np.array): The aligned individual gradients.
@@ -157,11 +120,23 @@ def calculate_gradients_similarity(ind_aligned_gradient: np.ndarray, group_gradi
     Returns:
     - corrs (list): The list of Spearman correlation values for each gradient component.
     """
-    # Spearman correlation per component
     corrs = []
+
     for i in range(group_gradients.shape[1]):
         rho, _ = stats.spearmanr(ind_aligned_gradient[:, i], group_gradients[:, i])
         corrs.append(rho)
 
-    correlation_mean = np.mean(corrs)
-    return correlation_mean
+    return np.mean(np.arctanh(corrs))
+
+
+def calculate_group_gradients_similarity(correlations: List[float]) -> float:
+    """
+    Calculate the mean of a list of correlation values.
+
+    Parameters:
+    - correlations (list): A list of correlation values.
+
+    Returns:
+    - float: The mean of the correlation values.
+    """
+    return float(np.mean(correlations))
