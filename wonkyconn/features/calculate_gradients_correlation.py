@@ -2,10 +2,7 @@ import glob
 
 import nibabel as nib
 import numpy as np
-from brainspace.gradient import (
-    GradientMaps,  # type: ignore[import-not-found]
-    alignment,
-)
+from brainspace.gradient import GradientMaps  # type: ignore[import-not-found]
 from nilearn.maskers import NiftiLabelsMasker  # type: ignore[import-not-found]
 from scipy import stats
 
@@ -97,13 +94,10 @@ def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[n
     group_gradients_np = np.vstack(group_gradients).T  # shape (n_regions, n_components)
 
     # Compute individual gradients
-    gm = GradientMaps(n_components=5)
-    ind_gradient = gm.fit(conn_clean)
+    gm = GradientMaps(n_components=5, alignment="procrustes", kernel="normalized_angle")
+    ind_gradient = gm.fit(conn_clean, reference=group_gradients_np)
 
-    # align (Procrustes)
-    ind_aligned_gradient = alignment.procrustes(ind_gradient.gradients_, group_gradients_np)
-
-    return ind_aligned_gradient, group_gradients_np
+    return ind_gradient.gradients_, group_gradients_np
 
 
 def calculate_gradients_similarity(ind_aligned_gradient: np.ndarray, group_gradients: np.ndarray) -> float:
