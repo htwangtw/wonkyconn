@@ -1,6 +1,7 @@
-import numpy as np
-from wonkyconn.features import calculate_gradients_correlation
 import nibabel as nib
+import numpy as np
+
+from wonkyconn.features import calculate_gradients_correlation
 
 
 def create_fake_connectivity(n_regions=434):
