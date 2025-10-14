@@ -6,25 +6,19 @@ import numpy as np
 from brainspace.gradient import GradientMaps  # type: ignore[import-not-found]
 from nilearn.maskers import NiftiLabelsMasker  # type: ignore[import-not-found]
 from scipy import stats
+from nilearn import image  # type: ignore[import-not-found]
 
 
-def remove_nan_from_matrix(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def remove_nan_from_matrix(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     col_mask = ~np.all(np.isnan(matrix), axis=0)
 
     kept_idx = np.where(col_mask)[0]
-    removed_idx = np.where(~col_mask)[0]
     conn_clean = matrix[np.ix_(kept_idx, kept_idx)]
 
-    return conn_clean, kept_idx, removed_idx
+    return conn_clean, kept_idx
 
 
-def overlapping_mask(subject_atlas: nib.Nifti1Image, group_mask: nib.Nifti1Image, matrix: np.ndarray) -> nib.Nifti1Image:
-    """
-    TODO: not used yet, will be implemented in the future or align atlas with gradient mask
-    """
-
-
-def mask_atlas_to_matrix(atlas: nib.Nifti1Image, kept_idx: np.ndarray) -> tuple[nib.Nifti1Image, np.ndarray]:
+def remove_nan_roi_atlas(atlas: nib.Nifti1Image, kept_idx: np.ndarray) -> nib.Nifti1Image:
     """
     Remove ROIs from an atlas that are not present in a connectivity matrix.
 
@@ -55,8 +49,64 @@ def mask_atlas_to_matrix(atlas: nib.Nifti1Image, kept_idx: np.ndarray) -> tuple[
     keep_mask = np.isin(atlas_data, kept_labels)
     kept_atlas_data = atlas_data.copy()
     kept_atlas_data[~keep_mask] = 0
-    kept_atlas_img = nib.Nifti1Image(kept_atlas_data, atlas.affine, atlas.header)
-    return kept_atlas_img
+    return nib.Nifti1Image(kept_atlas_data, atlas.affine, atlas.header)
+
+
+def overlapping_atlas_with_mask(subject_atlas: nib.Nifti1Image, group_mask: nib.Nifti1Image) -> nib.Nifti1Image:
+    """
+    Create a new atlas that only contains the regions that overlap with the group gradient mask.
+
+    Parameters
+    ----------
+    subject_atlas : nib.Nifti1Image
+        The subject's atlas in NIfTI format.
+    group_mask : nib.Nifti1Image
+        The group gradient mask in NIfTI format.
+
+    Returns
+    -------
+    nib.Nifti1Image
+        A new atlas that only contains the regions that overlap with the group gradient mask.
+    """
+
+    mask_gradient_resampled = image.resample_to_img(group_mask, subject_atlas, interpolation="nearest")
+
+    # Get arrays
+    atlas_data = subject_atlas.get_fdata().astype(int)
+    mask_data = mask_gradient_resampled.get_fdata() > 0  # binarized mask
+
+    masked_atlas_data = np.where(mask_data, atlas_data, 0)
+
+    return nib.Nifti1Image(masked_atlas_data, affine=subject_atlas.affine, header=subject_atlas.header)
+
+
+def clean_matrix_from_atlas(matrix: np.ndarray, atlas: nib.Nifti1Image) -> np.ndarray:
+    """
+    Remove rows/columns from a connectivity matrix for regions not present in the atlas.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Connectivity matrix
+    atlas : nib.Nifti1Image
+        Masked atlas
+
+    Returns
+    -------
+    np.ndarray
+        Connectivity matrix limited to regions present in the atlas.
+    """
+
+    atlas_data = atlas.get_fdata().astype(int)
+    roi_labels = sorted(np.unique(atlas_data[atlas_data > 0]))
+
+    # Get indices corresponding to these labels (assuming atlas labels are 1-based)
+    indices_to_keep = [int(lab - 1) for lab in roi_labels]
+
+    if max(indices_to_keep) >= matrix.shape[0]:
+        return matrix
+    else:
+        return matrix[np.ix_(indices_to_keep, indices_to_keep)]
 
 
 def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[np.ndarray, np.ndarray]:
@@ -73,13 +123,16 @@ def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[n
     - group_gradients (np.array): The group-level gradients.
     """
     path_gradients = "wonkyconn/data/gradients"
+    gradient_mask = nib.load(f"{path_gradients}/gradientmask_cortical_subcortical.nii.gz")
 
     # Remove NaN from matrix
-    conn_clean, kept_idx, removed_idx = remove_nan_from_matrix(ind_matrix)
+    conn_clean, kept_idx = remove_nan_from_matrix(ind_matrix)
 
-    # Then remove the region that do not overlap between atlas and matrix
-    atlas_mask_without_nan = mask_atlas_to_matrix(atlas, kept_idx)
-    masker = NiftiLabelsMasker(labels_img=atlas_mask_without_nan, standardize=False)
+    atlas_mask_without_nan = remove_nan_roi_atlas(atlas, kept_idx)
+    masked_atlas = overlapping_atlas_with_mask(atlas_mask_without_nan, gradient_mask)
+    masked_matrix = clean_matrix_from_atlas(conn_clean, masked_atlas)
+
+    masker = NiftiLabelsMasker(labels_img=masked_atlas, mask_img=gradient_mask)
 
     # Load all group gradient maps
     gradient_files = sorted(glob.glob(f"{path_gradients}/templates/gradient*_cortical_subcortical.nii.gz"))
@@ -94,7 +147,7 @@ def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[n
 
     # Compute individual gradients
     gm = GradientMaps(n_components=5, alignment="procrustes", kernel="normalized_angle")
-    ind_gradient = gm.fit(conn_clean, reference=group_gradients_np)
+    ind_gradient = gm.fit(masked_matrix, reference=group_gradients_np)
 
     return ind_gradient.gradients_, group_gradients_np
 
