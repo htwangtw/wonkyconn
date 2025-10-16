@@ -139,7 +139,7 @@ module = [
 
 [[tool.mypy.overrides]]
 ignore_errors = true
-module = ["wonkyconn.tests.*", "conf"]
+module = ["wonkyconn.tests.*", "conf", "subject-network-overlap"]
 
 [tool.pytest.ini_options]
 markers = [
