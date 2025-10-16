@@ -20,9 +20,9 @@ yeo_networks = fetch_atlas_yeo_2011(n_networks=7, thickness="thick")
 schaefer400 = fetch_atlas_schaefer_2018(n_rois=400, yeo_networks=7, resolution_mm=2)
 # mist444 = fetch_atlas_basc_multiscale_2015(resolution=400, version='asym')
 
-# create a dictionary to summarise yeo network seed converage
+# create a dictionary to summarise yeo network seed coverage
 yeo7_nii = load_img(yeo_networks.maps)
-yeo7_nii = list(iter_img(yeo7_nii))[0]  # for some reason there's a fourth dimention
+yeo7_nii = list(iter_img(yeo7_nii))[0]  # for some reason there's a fourth dimension
 network_labels = np.unique(yeo7_nii.dataobj)[1:]
 atlas_nii = load_img(schaefer400.maps)
 region_labels = np.unique(atlas_nii.dataobj)[1:]
@@ -43,11 +43,11 @@ roi_index_single_network_membership = region_membership.index[region_membership.
 roi_index_single_and_dmn = roi_index_single_network_membership[
     region_membership.loc[roi_index_single_network_membership, "yeo7-7"] == 1
 ]
-# add og label as a referece
+# add og label as a reference
 region_membership["original_labels"] = schaefer400.labels[1:]
 region_membership.to_csv("sandbox/reports/region_membership.tsv", sep="\t")
 
-# initalise objects
+# initialise objects
 atlas_masker = NiftiLabelsMasker(schaefer400.maps, labels=schaefer400.labels).fit()
 connectome = ConnectivityMeasure(kind="correlation")
 
@@ -108,7 +108,7 @@ for dk in denoising:
     average_connectivity_within_network = []
     std_connectivity_within_network = []
     corr_wtih_dmn = []
-    for i, conn in enumerate(connectomes_prepro):
+    for _i, conn in enumerate(connectomes_prepro):
         conn = conn.squeeze()
         subj_average_connectivity_within_network = []
         subj_variance_connectivity_within_network = []
@@ -179,7 +179,10 @@ for dk in denoising:
     #             conn = conn.squeeze()
     #             seed_based_map = conn[int(roi_index_single_and_dmn[-1] - 1), :]
     #             nii = atlas_masker.inverse_transform(seed_based_map)
-    #             display = plot_stat_map(nii, cmap='cold_hot', vmin=-1, vmax=1, title=dataset.phenotypic.iloc[i]['participant_id'])
+    #             display = plot_stat_map(
+    #               nii, cmap='cold_hot', vmin=-1, vmax=1,
+    #               title=dataset.phenotypic.iloc[i]['participant_id']
+    #             )
     #             display.add_contours(cur_region, color='k')
     #             plt.savefig(fp)
 
