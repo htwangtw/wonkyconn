@@ -13,7 +13,7 @@ from numpy import typing as npt
 
 from .logger import gc_log
 
-YEO_NETWORK_MAP = "data/atlases/atlas-Yeo7NetworksMNI152FreeSurferConformed1mmLiberal_dseg.nii.gz"
+YEO_NETWORK_MAP = "atlases/atlas-Yeo7NetworksMNI152FreeSurferConformed1mmLiberal_dseg.nii.gz"
 
 
 @dataclass
@@ -72,7 +72,7 @@ class Atlas(ABC):
         Returns:
             nib.nifti1.Nifti1Image: resampled yeo 7 networks image.
         """
-        yeo7_nii = load_img(files("wonkyconn").parent / YEO_NETWORK_MAP)
+        yeo7_nii = load_img(files("wonkyconn").parent / "data" / YEO_NETWORK_MAP)
         yeo7_nii = list(iter_img(yeo7_nii))[0]  # for some reason there's a fourth dimension
         yeo7_nii = resample_to_img(yeo7_nii, self.image, interpolation="nearest")
         return yeo7_nii
