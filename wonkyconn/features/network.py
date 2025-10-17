@@ -29,7 +29,7 @@ def single_subject_within_network_connectivity(
         pd.DataFrame: _description_
     """
 
-    yeo_network_labels = range(region_membership.shape[0])
+    yeo_network_labels = range(region_membership.shape[1])
     # get roi that only belong to one given network
     roi_index_single_network_membership = region_membership.index[region_membership.T.sum() == 1]
     roi_index_single_and_dmn = roi_index_single_network_membership[
