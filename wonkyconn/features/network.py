@@ -81,19 +81,14 @@ def network_similarity(
         std_connectivity_within_network.append(std)
         corr_wtih_dmn.append(corr)
 
-    # average_connectivity_within_network = pd.DataFrame(
-    #     average_connectivity_within_network, columns=[f"mean_{r}" for r in region_membership.columns]
-    # )
-    # std_connectivity_within_network = pd.DataFrame(
-    #     std_connectivity_within_network, columns=[f"sd_{r}" for r in region_membership.columns]
-    # )
-    # corr_wtih_dmn = pd.DataFrame(corr_wtih_dmn, columns=["corr_with_dmn"])
-    summary = pd.DataFrame(
-        [average_connectivity_within_network, std_connectivity_within_network, corr_wtih_dmn],
-        columns=[f"mean_{r}" for r in region_membership.columns]
-        + [f"sd_{r}" for r in region_membership.columns]
-        + ["corr_with_dmn"],
+    average_connectivity_within_network = pd.DataFrame(
+        average_connectivity_within_network, columns=[f"mean_{r}" for r in region_membership.columns]
     )
+    std_connectivity_within_network = pd.DataFrame(
+        std_connectivity_within_network, columns=[f"sd_{r}" for r in region_membership.columns]
+    )
+    corr_wtih_dmn = pd.DataFrame(corr_wtih_dmn, columns=["corr_with_dmn"])
+    summary = pd.concat([average_connectivity_within_network, std_connectivity_within_network, corr_wtih_dmn], axis=1)
 
     # calculate distance
     summary["mean-diff_dmn_visual"] = summary["mean_yeo7-7"] - summary["mean_yeo7-1"]
