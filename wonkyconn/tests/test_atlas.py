@@ -38,6 +38,9 @@ def test_dseg_atlas() -> None:
     distance_matrix = atlas.get_distance_matrix()
     assert np.abs(_distance_matrix - distance_matrix).mean() < 1  # mm
 
+    region_membership = atlas.get_yeo7_membership()
+    assert region_membership.shape == (400, 7)
+
 
 def _get_centroids(path: Path):
     """
@@ -77,3 +80,7 @@ def test_probseg_atlas() -> None:
 
     distance_matrix = atlas.get_distance_matrix()
     assert np.abs(_distance_matrix - distance_matrix).mean() < 50  # mm
+
+    region_membership = atlas.get_yeo7_membership()
+    assert region_membership.shape == (64, 7)
+    assert region_membership.values.sum() == 64
