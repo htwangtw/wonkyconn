@@ -20,6 +20,7 @@ from .features.calculate_degrees_of_freedom import (
 )
 from .features.distance_dependence import calculate_distance_dependence
 from .features.gcor import calculate_gcor
+from .features.network import network_similarity
 from .features.quality_control_connectivity import (
     calculate_median_absolute,
     calculate_qcfc,
@@ -113,10 +114,13 @@ def workflow(args: argparse.Namespace) -> None:
         raise ValueError("No groups found")
 
     distance_matrices: dict[str, npt.NDArray[np.float64]] = {seg: atlases[seg].get_distance_matrix() for seg in segs}
+    region_memberships: dict[str, pd.DataFrame] = {seg: atlases[seg].get_yeo7_membership() for seg in segs}
 
     records: list[dict[str, Any]] = list()
     for key, connectivity_matrices in tqdm(grouped_connectivity_matrix.items(), unit="groups"):
-        record = make_record(index, data_frame, connectivity_matrices, distance_matrices, metric_key, seg_key)
+        record = make_record(
+            index, data_frame, connectivity_matrices, distance_matrices, region_memberships, metric_key, seg_key
+        )
         record.update(dict(zip(group_by, key, strict=False)))
         records.append(record)
 
@@ -131,6 +135,7 @@ def make_record(
     data_frame: pd.DataFrame,
     connectivity_matrices: list[ConnectivityMatrix],
     distance_matrices: dict[str, npt.NDArray[np.float64]],
+    region_memberships: dict[str, pd.DataFrame],
     metric_key: str,
     seg_key: str,
 ) -> dict[str, Any]:
@@ -162,11 +167,15 @@ def make_record(
     # seann: compute group-level GCOR statistics (mean and SEM)
     gcor = calculate_gcor(connectivity_matrices)
 
+    dmn_similarity, t_stats_dmn_vis_fpn = network_similarity(connectivity_matrices, region_memberships[seg])
+
     record = dict(
         median_absolute_qcfc=calculate_median_absolute(qcfc.correlation),
         percentage_significant_qcfc=calculate_qcfc_percentage(qcfc),
         distance_dependence=calculate_distance_dependence(qcfc, distance_matrix),
         gcor=gcor,
+        dmn_similarity=dmn_similarity,
+        dmn_vis_distance_vs_dmn_fpn=t_stats_dmn_vis_fpn,
         **calculate_degrees_of_freedom_loss(connectivity_matrices)._asdict(),
     )
 
