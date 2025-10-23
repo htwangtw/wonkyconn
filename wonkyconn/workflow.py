@@ -124,7 +124,7 @@ def workflow(args: argparse.Namespace) -> None:
             distance_matrices,
             metric_key,
             seg_key,
-            atlases[key[group_by.index(seg_key)]],
+            atlases,
         )
         record.update(dict(zip(group_by, key, strict=False)))
         records.append(record)
@@ -142,7 +142,7 @@ def make_record(
     distance_matrices: dict[str, npt.NDArray[np.float64]],
     metric_key: str,
     seg_key: str,
-    atlas: Atlas,
+    atlases: dict[str, Atlas],
 ) -> dict[str, Any]:
     # seann: added sub- tag when looking up subjects only if sub- is not already present
     seg_subjects: list[str] = list()
@@ -172,6 +172,7 @@ def make_record(
     # seann: compute group-level GCOR statistics (mean and SEM)
     gcor = calculate_gcor(connectivity_matrices)
 
+    atlas = atlases[seg]
     gradients, gradients_group = extract_gradients(connectivity_matrices, atlas)
 
     record = dict(
