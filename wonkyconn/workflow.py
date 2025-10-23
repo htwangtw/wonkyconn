@@ -18,6 +18,7 @@ from .base import ConnectivityMatrix
 from .features.calculate_degrees_of_freedom import (
     calculate_degrees_of_freedom_loss,
 )
+from .features.calculate_gradients_correlation import calculate_gradients_similarity, extract_gradients
 from .features.distance_dependence import calculate_distance_dependence
 from .features.gcor import calculate_gcor
 from .features.quality_control_connectivity import (
@@ -116,7 +117,15 @@ def workflow(args: argparse.Namespace) -> None:
 
     records: list[dict[str, Any]] = list()
     for key, connectivity_matrices in tqdm(grouped_connectivity_matrix.items(), unit="groups"):
-        record = make_record(index, data_frame, connectivity_matrices, distance_matrices, metric_key, seg_key)
+        record = make_record(
+            index,
+            data_frame,
+            connectivity_matrices,
+            distance_matrices,
+            metric_key,
+            seg_key,
+            atlases[key[group_by.index(seg_key)]],
+        )
         record.update(dict(zip(group_by, key, strict=False)))
         records.append(record)
 
@@ -133,6 +142,7 @@ def make_record(
     distance_matrices: dict[str, npt.NDArray[np.float64]],
     metric_key: str,
     seg_key: str,
+    atlas: Atlas,
 ) -> dict[str, Any]:
     # seann: added sub- tag when looking up subjects only if sub- is not already present
     seg_subjects: list[str] = list()
@@ -162,11 +172,14 @@ def make_record(
     # seann: compute group-level GCOR statistics (mean and SEM)
     gcor = calculate_gcor(connectivity_matrices)
 
+    gradients, gradients_group = extract_gradients(connectivity_matrices, atlas)
+
     record = dict(
         median_absolute_qcfc=calculate_median_absolute(qcfc.correlation),
         percentage_significant_qcfc=calculate_qcfc_percentage(qcfc),
         distance_dependence=calculate_distance_dependence(qcfc, distance_matrix),
         gcor=gcor,
+        gradients_similarity=calculate_gradients_similarity(gradients, gradients_group),
         **calculate_degrees_of_freedom_loss(connectivity_matrices)._asdict(),
     )
 

@@ -9,6 +9,8 @@ from nilearn import image  # type: ignore[import-not-found]
 from nilearn.maskers import NiftiLabelsMasker  # type: ignore[import-not-found]
 from scipy import stats
 
+from ..base import ConnectivityMatrix
+
 
 def remove_nan_from_matrix(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     col_mask = ~np.all(np.isnan(matrix), axis=0)
@@ -112,7 +114,9 @@ def clean_matrix_from_atlas(matrix: np.ndarray, atlas: nib.Nifti1Image) -> np.nd
         return matrix[np.ix_(indices_to_keep, indices_to_keep)]
 
 
-def extract_gradients(connectivity_matrices: np.ndarray, atlas: nib.Nifti1Image) -> tuple[List[np.ndarray], np.ndarray]:
+def extract_gradients(
+    connectivity_matrices: list[ConnectivityMatrix], atlas: nib.Nifti1Image
+) -> tuple[List[np.ndarray], np.ndarray]:
     """
     Calculate the gradients for each individual and load group-level gradients
     from Margulies et al., 2016 for alignment.
@@ -134,10 +138,11 @@ def extract_gradients(connectivity_matrices: np.ndarray, atlas: nib.Nifti1Image)
     # Load all group gradient maps
     gradient_files = sorted(glob.glob(str(path_gradients / "templates" / "gradient*_cortical_subcortical.nii.gz")))
 
-    # Remove NaN from matrix
-    gradients = []
-    for ind_matrix in connectivity_matrices:
-        conn_clean, kept_idx = remove_nan_from_matrix(ind_matrix)
+    for connectivity_matrix in connectivity_matrices:
+        # Remove NaN from matrix
+        matrix = np.asarray(connectivity_matrix.load(), dtype=np.float64)
+        gradients = []
+        conn_clean, kept_idx = remove_nan_from_matrix(matrix)
 
         atlas_mask_without_nan, kept_labels = remove_nan_roi_atlas(atlas, kept_idx)
         masked_atlas = overlapping_atlas_with_mask(atlas_mask_without_nan, gradient_mask)
