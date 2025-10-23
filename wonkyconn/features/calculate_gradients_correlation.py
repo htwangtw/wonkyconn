@@ -1,13 +1,13 @@
 import glob
-from typing import List, Tuple
 from pathlib import Path
+from typing import List, Tuple
 
 import nibabel as nib
 import numpy as np
 from brainspace.gradient import GradientMaps  # type: ignore[import-not-found]
+from nilearn import image  # type: ignore[import-not-found]
 from nilearn.maskers import NiftiLabelsMasker  # type: ignore[import-not-found]
 from scipy import stats
-from nilearn import image  # type: ignore[import-not-found]
 
 
 def remove_nan_from_matrix(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -70,7 +70,9 @@ def overlapping_atlas_with_mask(subject_atlas: nib.Nifti1Image, group_mask: nib.
         A new atlas that only contains the regions that overlap with the group gradient mask.
     """
 
-    mask_gradient_resampled = image.resample_to_img(group_mask, subject_atlas, interpolation="nearest", copy_header=True, force_resample=True)
+    mask_gradient_resampled = image.resample_to_img(
+        group_mask, subject_atlas, interpolation="nearest", copy_header=True, force_resample=True
+    )
 
     # Get arrays
     atlas_data = subject_atlas.get_fdata()
@@ -110,7 +112,7 @@ def clean_matrix_from_atlas(matrix: np.ndarray, atlas: nib.Nifti1Image) -> np.nd
         return matrix[np.ix_(indices_to_keep, indices_to_keep)]
 
 
-def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[np.ndarray, np.ndarray]:
+def extract_gradients(connectivity_matrices: np.ndarray, atlas: nib.Nifti1Image) -> tuple[List[np.ndarray], np.ndarray]:
     """
     Calculate the gradients for each individual and load group-level gradients
     from Margulies et al., 2016 for alignment.
@@ -129,54 +131,34 @@ def extract_gradients(ind_matrix: np.ndarray, atlas: nib.Nifti1Image) -> tuple[n
     path_gradients = repo_root / "data" / "gradients"
     gradient_mask = nib.load(path_gradients / "gradientmask_cortical_subcortical.nii.gz")
 
-    # Remove NaN from matrix
-    conn_clean, kept_idx = remove_nan_from_matrix(ind_matrix)
-
-    atlas_mask_without_nan, kept_labels = remove_nan_roi_atlas(atlas, kept_idx)
-    masked_atlas = overlapping_atlas_with_mask(atlas_mask_without_nan, gradient_mask)
-    masked_matrix = clean_matrix_from_atlas(conn_clean, masked_atlas)
-
-    masker = NiftiLabelsMasker(labels_img=masked_atlas, mask_img=gradient_mask)
-
     # Load all group gradient maps
     gradient_files = sorted(glob.glob(str(path_gradients / "templates" / "gradient*_cortical_subcortical.nii.gz")))
 
-    group_gradients = []
-    for fname in gradient_files:
-        grad_img = nib.load(fname)
-        grad_vals = masker.fit_transform(grad_img)  # shape (1, n_regions)
-        group_gradients.append(grad_vals.squeeze())
+    # Remove NaN from matrix
+    gradients = []
+    for ind_matrix in connectivity_matrices:
+        conn_clean, kept_idx = remove_nan_from_matrix(ind_matrix)
 
-    group_gradients_np = np.vstack(group_gradients).T  # shape (n_regions, n_components)
+        atlas_mask_without_nan, kept_labels = remove_nan_roi_atlas(atlas, kept_idx)
+        masked_atlas = overlapping_atlas_with_mask(atlas_mask_without_nan, gradient_mask)
+        masked_matrix = clean_matrix_from_atlas(conn_clean, masked_atlas)
 
-    # Compute individual gradients
-    gm = GradientMaps(n_components=5, alignment="procrustes", kernel="normalized_angle")
-    ind_gradient = gm.fit(masked_matrix, reference=group_gradients_np)
+        masker = NiftiLabelsMasker(labels_img=masked_atlas, mask_img=gradient_mask)
 
-    return ind_gradient.aligned_, group_gradients_np
+        group_gradients = []
+        for fname in gradient_files:
+            grad_img = nib.load(fname)
+            grad_vals = masker.fit_transform(grad_img)  # shape (1, n_regions)
+            group_gradients.append(grad_vals.squeeze())
 
+        group_gradients_np = np.vstack(group_gradients).T  # shape (n_regions, n_components)
 
-def calculate_gradients_similarity(ind_aligned_gradient: np.ndarray, group_gradients: np.ndarray) -> float:
-    """
-    Calculate the Spearman's correlation between the individual gradients and the reference
-    group-level gradients from Margulies et al., 2016. Then apply Fishers R-to-Z transformation
-    and average across all gradient components.
+        # Compute individual gradients
+        gm = GradientMaps(n_components=5, alignment="procrustes", kernel="normalized_angle")
+        ind_gradient = gm.fit(masked_matrix, reference=group_gradients_np)
 
-    Parameters:
-    - ind_aligned_gradient (np.array): The aligned individual gradients.
-    - group_gradients (np.array): The group-level gradients.
-
-    Returns:
-    - correlarions (list): The list of Spearman correlation values for each gradient component.
-    """
-
-    for j in range(ind_aligned_gradient.shape[1]):
-        correlarions = []
-        for i in range(group_gradients.shape[1]):
-            rho, _ = stats.spearmanr(ind_aligned_gradient[:, j], group_gradients[:, i])
-            correlarions.append(rho)
-
-    return np.mean(np.arctanh(correlarions))
+        gradients.append(ind_gradient.aligned_)
+    return gradients, group_gradients_np
 
 
 def calculate_group_gradients_similarity(correlations: List[float]) -> float:
@@ -190,3 +172,30 @@ def calculate_group_gradients_similarity(correlations: List[float]) -> float:
     - float: The mean of the correlation values.
     """
     return float(np.mean(correlations))
+
+
+def calculate_gradients_similarity(gradients: List[np.ndarray], group_gradients: np.ndarray) -> float:
+    """
+    Calculate the Spearman's correlation between the individual gradients and the reference
+    group-level gradients from Margulies et al., 2016. Then apply Fishers R-to-Z transformation
+    and average across all gradient components.
+
+    Parameters:
+    - ind_aligned_gradient (np.array): The aligned individual gradients.
+    - group_gradients (np.array): The group-level gradients.
+
+    Returns:
+    - correlarions (list): The list of Spearman correlation values for each gradient component.
+    """
+
+    # Spearman correlation per component
+    correlations = []
+    for gradient in gradients:
+        correlations_per_subject = []
+        for i in range(group_gradients.shape[1]):
+            rho, _ = stats.spearmanr(gradient[:, i], group_gradients[:, i])
+            correlations_per_subject.append(rho)
+
+        correlations.append(np.mean(np.arctanh(correlations_per_subject)))  # Fisher R-to-Z transformation and average
+
+    return calculate_group_gradients_similarity(correlations)
