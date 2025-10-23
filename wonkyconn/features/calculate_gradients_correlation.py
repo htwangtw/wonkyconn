@@ -1,6 +1,6 @@
 import glob
 from pathlib import Path
-from typing import List, Tuple
+from typing import Iterable, List, Tuple
 
 import nibabel as nib
 import numpy as np
@@ -115,7 +115,7 @@ def clean_matrix_from_atlas(matrix: np.ndarray, atlas: nib.Nifti1Image) -> np.nd
 
 
 def extract_gradients(
-    connectivity_matrices: list[ConnectivityMatrix], atlas: nib.Nifti1Image
+    connectivity_matrices: Iterable[ConnectivityMatrix], atlas: nib.Nifti1Image
 ) -> tuple[List[np.ndarray], np.ndarray]:
     """
     Calculate the gradients for each individual and load group-level gradients
@@ -138,13 +138,13 @@ def extract_gradients(
     # Load all group gradient maps
     gradient_files = sorted(glob.glob(str(path_gradients / "templates" / "gradient*_cortical_subcortical.nii.gz")))
 
+    gradients = []
     for connectivity_matrix in connectivity_matrices:
         # Remove NaN from matrix
         matrix = np.asarray(connectivity_matrix.load(), dtype=np.float64)
-        gradients = []
         conn_clean, kept_idx = remove_nan_from_matrix(matrix)
 
-        atlas_mask_without_nan, kept_labels = remove_nan_roi_atlas(atlas, kept_idx)
+        atlas_mask_without_nan, _ = remove_nan_roi_atlas(atlas, kept_idx)
         masked_atlas = overlapping_atlas_with_mask(atlas_mask_without_nan, gradient_mask)
         masked_matrix = clean_matrix_from_atlas(conn_clean, masked_atlas)
 
@@ -163,6 +163,7 @@ def extract_gradients(
         ind_gradient = gm.fit(masked_matrix, reference=group_gradients_np)
 
         gradients.append(ind_gradient.aligned_)
+
     return gradients, group_gradients_np
 
 

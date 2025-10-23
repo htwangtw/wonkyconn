@@ -1,22 +1,41 @@
+import tempfile
 from pathlib import Path
 
 import nibabel as nib
 import numpy as np
 
+from wonkyconn.base import ConnectivityMatrix
 from wonkyconn.features import calculate_gradients_correlation
 
 
-def create_fake_connectivity(n_regions=434, n_subjects=1):
-    # random symmetric connectivity matrix with diagonal=1
+def create_fake_connectivity(n_regions=434, n_subjects=5) -> tuple[Path, list[ConnectivityMatrix]]:
+    """
+    Create fake connectivity matrices in a temporary directory and return both
+    the directory path and the ConnectivityMatrix objects.
+    """
+    temp_dir = Path(tempfile.mkdtemp(prefix="fake_connectivity_"))
 
     connectivity_matrices = []
-    for _ in range(n_subjects):
+    for subj_idx in range(n_subjects):
+        # Generate symmetric random matrix
         matrix = np.random.uniform(-1, 1, size=(n_regions, n_regions))
         conn_matrix = (matrix + matrix.T) / 2
         np.fill_diagonal(conn_matrix, 1)
 
-    connectivity_matrices.append(conn_matrix)
-    return np.array(connectivity_matrices)
+        # Save as TSV
+        path = temp_dir / f"sub-{subj_idx + 1}_connectivity.tsv"
+        np.savetxt(path, conn_matrix, delimiter="\t", fmt="%.6f")
+
+        # Create metadata
+        metadata = {
+            "subject_id": f"sub-{subj_idx + 1}",
+            "n_regions": n_regions,
+            "description": "Fake symmetric connectivity matrix",
+        }
+
+        connectivity_matrices.append(ConnectivityMatrix(path=path, metadata=metadata))
+
+    return connectivity_matrices
 
 
 def test_gradients():
@@ -25,9 +44,9 @@ def test_gradients():
     path = repo_root / "data" / "gradients"
     atlas = nib.load(str(path / "atlas" / "atlas-Schaefer2018Combined_dseg.nii.gz"))
 
-    conn_matrix = create_fake_connectivity(n_regions=434, n_subjects=3)
+    connectivity_matrices = create_fake_connectivity(n_regions=434, n_subjects=3)
 
-    random_gradient, group_gradients = calculate_gradients_correlation.extract_gradients(conn_matrix, atlas=atlas)
+    random_gradient, group_gradients = calculate_gradients_correlation.extract_gradients(connectivity_matrices, atlas=atlas)
 
     # Calculate similarity for random gradient
     random_similarity = calculate_gradients_correlation.calculate_gradients_similarity(random_gradient, group_gradients)
@@ -36,8 +55,6 @@ def test_gradients():
     template_gradient_similarity = calculate_gradients_correlation.calculate_gradients_similarity(
         [group_gradients], group_gradients
     )
-    print(f"Template gradient similarity: {template_gradient_similarity}")
-    print(f"Random gradient similarity: {random_similarity}")
 
     assert template_gradient_similarity > 0.99
     assert random_similarity < template_gradient_similarity
