@@ -172,7 +172,7 @@ def make_record(
     # seann: compute group-level GCOR statistics (mean and SEM)
     gcor = calculate_gcor(connectivity_matrices)
 
-    atlas = atlases[seg]
+    atlas = atlases[seg].image
     gradients, gradients_group = extract_gradients(connectivity_matrices, atlas)
 
     record = dict(
