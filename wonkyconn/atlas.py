@@ -7,8 +7,8 @@ import nibabel as nib
 import numpy as np
 import pandas as pd
 import scipy
-from nilearn.image import iter_img, load_img, math_img, resample_to_img
-from nilearn.maskers import NiftiLabelsMasker, NiftiMasker
+from nilearn.image import iter_img, load_img, math_img, resample_to_img  # type: ignore[import-not-found]
+from nilearn.maskers import NiftiLabelsMasker, NiftiMasker  # type: ignore[import-not-found]
 from numpy import typing as npt
 
 from .logger import gc_log
