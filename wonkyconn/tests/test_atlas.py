@@ -1,13 +1,12 @@
 from pathlib import Path
 
-import datalad.api as dl
 import numpy as np
 import pandas as pd
 import scipy
 from nilearn.plotting import find_probabilistic_atlas_cut_coords
 from templateflow.api import get as get_template
 
-from wonkyconn.atlas import YEO_NETWORK_MAP, Atlas
+from wonkyconn.atlas import Atlas
 
 
 def test_dseg_atlas(data_path: Path) -> None:
