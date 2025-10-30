@@ -75,7 +75,7 @@ class Atlas(ABC):
         # yeo7_nii = load_img(files("wonkyconn").parent / "data" / YEO_NETWORK_MAP)  # datalad managed directory at root
         yeo7_nii = load_img(files("wonkyconn") / "data" / YEO_NETWORK_MAP)  # in wonkyconn/data
         yeo7_nii = list(iter_img(yeo7_nii))[0]  # for some reason there's a fourth dimension
-        yeo7_nii = resample_to_img(yeo7_nii, self.image, interpolation="nearest")
+        yeo7_nii = resample_to_img(yeo7_nii, self.image, interpolation="nearest", copy_header=True, force_resample=True)
         return yeo7_nii
 
     @abstractmethod

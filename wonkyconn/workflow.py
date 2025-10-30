@@ -118,6 +118,7 @@ def workflow(args: argparse.Namespace) -> None:
 
     records: list[dict[str, Any]] = list()
     for key, connectivity_matrices in tqdm(grouped_connectivity_matrix.items(), unit="groups"):
+        gc_log.debug(f"Processing {key}")
         record = make_record(
             index, data_frame, connectivity_matrices, distance_matrices, region_memberships, metric_key, seg_key
         )

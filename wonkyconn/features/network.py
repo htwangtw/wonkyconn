@@ -31,12 +31,16 @@ def single_subject_within_network_connectivity(
     """
 
     yeo_network_labels = range(region_membership.shape[1])
-    # get roi that only belong to one given network
+    # if it's a high res atlas, get roi that only belong to one given network
     roi_index_single_network_membership = region_membership.index[region_membership.T.sum() == 1]
     roi_index_single_and_dmn = roi_index_single_network_membership[
         region_membership.loc[roi_index_single_network_membership, f"yeo7-{yeo_network_index}"] == 1
     ]
     roi_index = roi_index_single_and_dmn - 1  # convert to zero based index
+    if roi_index.empty:  # low res atlas will give you empty list
+        # use the original membership instead
+        roi_index = region_membership.index[region_membership[f"yeo7-{yeo_network_index}"] == 1]
+        roi_index -= 1
 
     # calculate similarity of the thresholded individual level seed based connectivity with the binary mask
     subj_average_connectivity_within_network = []
