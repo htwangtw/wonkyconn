@@ -11,8 +11,9 @@ from wonkyconn.atlas import YEO_NETWORK_MAP, Atlas
 
 
 def test_dseg_atlas(data_path: Path) -> None:
-    atlas_path = data_path / YEO_NETWORK_MAP
-    dl.get(str(atlas_path))
+    # atlas_path = data_path / YEO_NETWORK_MAP
+    # dl.get(str(atlas_path))
+
     url = (
         "https://raw.githubusercontent.com/ThomasYeoLab/CBIG/master/"
         "stable_projects/brain_parcellation/Schaefer2018_LocalGlobal/"
@@ -62,8 +63,8 @@ def _get_centroids(path: Path):
 
 def test_probseg_atlas(data_path: Path) -> None:
     # "TODO: @haoting wants to revisit this test, to check if the assertion values make sense"
-    atlas_path = data_path / YEO_NETWORK_MAP
-    dl.get(str(atlas_path))
+    # atlas_path = data_path / YEO_NETWORK_MAP
+    # dl.get(str(atlas_path))
 
     path = get_template(
         template="MNI152NLin2009cAsym",
