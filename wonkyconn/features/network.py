@@ -8,6 +8,7 @@ from typing import Tuple
 
 import numpy as np
 import pandas as pd
+from numpy import typing as npt
 from scipy import stats
 
 from ..base import ConnectivityMatrix
@@ -17,7 +18,7 @@ def single_subject_within_network_connectivity(
     connectivity_matrix: ConnectivityMatrix,
     region_membership: pd.DataFrame,
     yeo_network_index: int = 7,
-) -> pd.DataFrame:
+) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], np.float64]:
     """_summary_
 
     Args:
@@ -43,23 +44,37 @@ def single_subject_within_network_connectivity(
     subj_corr_wtih_network = []
     for idx_roi in roi_index:
         seed_based_map = connectivity_matrix.load()[int(idx_roi), :]
+
         # isolate the parcal per network
         networks = [region_membership[f"yeo7-{int(n + 1)}"].values * seed_based_map for n in yeo_network_labels]
         networks = np.asarray(networks)
         networks[networks == 0] = np.nan
         mean_within_network_connection = np.nanmean(networks, axis=1)
         std_within_network_connection = np.nanstd(networks, axis=1)
-        correlation_with_given_network = np.corrcoef(seed_based_map, region_membership[f"yeo7-{yeo_network_index}"].to_numpy())
+
+        # Remove rows with NaN values
+        mask = np.array(
+            [
+                np.all(np.isfinite(row))
+                for row in np.column_stack((seed_based_map, region_membership[f"yeo7-{yeo_network_index}"].to_numpy()))
+            ]
+        )
+
+        correlation_with_given_network = np.corrcoef(
+            seed_based_map[mask], region_membership[f"yeo7-{yeo_network_index}"].to_numpy()[mask]
+        )
 
         subj_average_connectivity_within_network.append(mean_within_network_connection)
         subj_variance_connectivity_within_network.append(std_within_network_connection)
         subj_corr_wtih_network.append(correlation_with_given_network[1, 0])
-
     # summarise of the given subject
-    subj_average_connectivity_within_network = pd.DataFrame(subj_average_connectivity_within_network).mean()
-    subj_variance_connectivity_within_network = pd.DataFrame(subj_variance_connectivity_within_network).mean()
-    subj_corr_wtih_network = pd.DataFrame(subj_corr_wtih_network).mean()
-    return subj_average_connectivity_within_network, subj_variance_connectivity_within_network, subj_corr_wtih_network
+    subj_average_connectivity_within_network = pd.DataFrame(subj_average_connectivity_within_network).mean().to_numpy()
+    subj_variance_connectivity_within_network = pd.DataFrame(subj_variance_connectivity_within_network).mean().to_numpy()
+    return (
+        subj_average_connectivity_within_network,
+        subj_variance_connectivity_within_network,
+        np.nanmean(subj_corr_wtih_network),
+    )
 
 
 def network_similarity(
