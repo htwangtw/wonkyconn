@@ -22,12 +22,14 @@ def single_subject_within_network_connectivity(
     """_summary_
 
     Args:
-        connectivity_matrix (ConnectivityMatrix): _description_
-        region_membership (pd.DataFrame): _description_
-        yeo_network_index (int, optional): _description_. Defaults to 7.
+        connectivity_matrix (ConnectivityMatrix): Functional connectivity matrix.
+        region_membership (pd.DataFrame): Atlas parcel correspondence to Yeo 7 network. Generate throguh class Atlas.
+        yeo_network_index (int, optional): Yeo network for similarity calculation. Defaults to 7.
 
     Returns:
-        pd.DataFrame: _description_
+        npt.NDArray[np.float64]: Mean of functional connectivity value within each network.
+        npt.NDArray[np.float64]: Standard deviation of functional connectivity value within each network.
+        np.float64: Average pearson's correlation of the connectivity pattern with the selected network.
     """
 
     yeo_network_labels = range(region_membership.shape[1])
@@ -50,8 +52,10 @@ def single_subject_within_network_connectivity(
         seed_based_map = connectivity_matrix.load()[int(idx_roi), :]
 
         # isolate the parcal per network
-        networks = [region_membership[f"yeo7-{int(n + 1)}"].values * seed_based_map for n in yeo_network_labels]
-        networks = np.asarray(networks)
+        isolate_parcel = [
+            region_membership[f"yeo7-{int(n + 1)}"].to_numpy(dtype=np.float32) * seed_based_map for n in yeo_network_labels
+        ]
+        networks = np.asarray(isolate_parcel)
         networks[networks == 0] = np.nan
         mean_within_network_connection = np.nanmean(networks, axis=1)
         std_within_network_connection = np.nanstd(networks, axis=1)
@@ -71,9 +75,10 @@ def single_subject_within_network_connectivity(
         subj_average_connectivity_within_network.append(mean_within_network_connection)
         subj_variance_connectivity_within_network.append(std_within_network_connection)
         subj_corr_wtih_network.append(correlation_with_given_network[1, 0])
+
     # summarise of the given subject
-    subj_average_connectivity_within_network = pd.DataFrame(subj_average_connectivity_within_network).mean().to_numpy()
-    subj_variance_connectivity_within_network = pd.DataFrame(subj_variance_connectivity_within_network).mean().to_numpy()
+    subj_average_connectivity_within_network = np.asarray(subj_average_connectivity_within_network).mean()
+    subj_variance_connectivity_within_network = np.asarray(subj_variance_connectivity_within_network).mean()
     return (
         subj_average_connectivity_within_network,
         subj_variance_connectivity_within_network,
@@ -84,14 +89,16 @@ def single_subject_within_network_connectivity(
 def network_similarity(
     connectivity_matrices: list[ConnectivityMatrix], region_membership: pd.DataFrame
 ) -> Tuple[np.float64, np.float64]:
-    """_summary_
+    """Calculate network similarity of of default mode network recovered through functional connectivity and Yeo's template.
 
     Args:
-        connectivity_matrices (list[ConnectivityMatrix]): _description_
-        region_membership (pd.DataFrame): _description_
+        connectivity_matrices (list[ConnectivityMatrix]): A collection of functional connectivity matrices of the same
+            atlas and denoising method.
+        region_membership (pd.DataFrame): Atlas parcel correspondence to Yeo 7 network. Generate throguh the Atlas class.
 
     Returns:
-        pd.DataFrame: _description_
+        Tuple[np.float64, np.float64]: Group level statistics of average correlation with the default mode network and
+            t-statistics of DMN-FPN distance vs DMN-VIS distance.
     """
     average_connectivity_within_network, std_connectivity_within_network, corr_wtih_dmn = [], [], []
     for cm in connectivity_matrices:
@@ -100,14 +107,12 @@ def network_similarity(
         std_connectivity_within_network.append(std)
         corr_wtih_dmn.append(corr)
 
-    average_connectivity_within_network = pd.DataFrame(
-        average_connectivity_within_network, columns=[f"mean_{r}" for r in region_membership.columns]
+    df_average = pd.DataFrame(
+        np.asarray(average_connectivity_within_network), columns=[f"mean_{r}" for r in region_membership.columns]
     )
-    std_connectivity_within_network = pd.DataFrame(
-        std_connectivity_within_network, columns=[f"sd_{r}" for r in region_membership.columns]
-    )
-    corr_wtih_dmn = pd.DataFrame(corr_wtih_dmn, columns=["corr_with_dmn"])
-    summary = pd.concat([average_connectivity_within_network, std_connectivity_within_network, corr_wtih_dmn], axis=1)
+    df_std = pd.DataFrame(np.asarray(std_connectivity_within_network), columns=[f"sd_{r}" for r in region_membership.columns])
+    corr_dmn = pd.DataFrame(np.asarray(corr_wtih_dmn), columns=["corr_with_dmn"])
+    summary = pd.concat([df_average, df_std, corr_dmn], axis=1)
 
     # calculate distance
     summary["mean-diff_dmn_visual"] = summary["mean_yeo7-7"] - summary["mean_yeo7-1"]
@@ -115,4 +120,4 @@ def network_similarity(
 
     mean_corr_with_dmn = summary["corr_with_dmn"].mean()
     t_stats_dmn_vis_fpn, _ = stats.ttest_rel(summary["mean-diff_dmn_visual"], summary["mean-diff_dmn_fpn"])
-    return mean_corr_with_dmn, t_stats_dmn_vis_fpn
+    return np.float64(mean_corr_with_dmn), np.float64(t_stats_dmn_vis_fpn)
