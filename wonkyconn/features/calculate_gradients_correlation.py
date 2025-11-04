@@ -5,6 +5,7 @@ from typing import Iterable, List, Tuple
 import nibabel as nib
 import numpy as np
 from brainspace.gradient import GradientMaps  # type: ignore[import-not-found]
+from joblib import Parallel, delayed  # type: ignore[import-not-found]
 from nilearn import image  # type: ignore[import-not-found]
 from nilearn.maskers import NiftiLabelsMasker  # type: ignore[import-not-found]
 from scipy import stats
@@ -114,6 +115,33 @@ def clean_matrix_from_atlas(matrix: np.ndarray, atlas: nib.Nifti1Image) -> np.nd
         return matrix[np.ix_(indices_to_keep, indices_to_keep)]
 
 
+def process_single_matrix(
+    connectivity_matrix: ConnectivityMatrix,
+    atlas: nib.Nifti1Image,
+    gradient_mask: nib.Nifti1Image,
+    gradient_imgs: List[nib.Nifti1Image],
+) -> Tuple[np.ndarray, np.ndarray]:
+    matrix = np.asarray(connectivity_matrix.load(), dtype=np.float64)
+    conn_clean, kept_idx = remove_nan_from_matrix(matrix)
+    atlas_mask_without_nan, _ = remove_nan_roi_atlas(atlas, kept_idx)
+    masked_atlas = overlapping_atlas_with_mask(atlas_mask_without_nan, gradient_mask)
+    masked_matrix = clean_matrix_from_atlas(conn_clean, masked_atlas)
+    masker = NiftiLabelsMasker(labels_img=masked_atlas, mask_img=gradient_mask)
+
+    # Transform pre-loaded group gradients
+    group_gradients = []
+    for grad_img in gradient_imgs:
+        grad_vals = masker.fit_transform(grad_img)  # shape (1, n_regions)
+        group_gradients.append(grad_vals.squeeze())
+    group_gradients_np = np.vstack(group_gradients).T  # shape (n_regions, n_components)
+
+    # Compute individual gradients
+    gm = GradientMaps(n_components=5, alignment="procrustes", kernel="normalized_angle")
+    ind_gradient = gm.fit(masked_matrix, reference=group_gradients_np)
+
+    return ind_gradient.aligned_, group_gradients_np
+
+
 def extract_gradients(
     connectivity_matrices: Iterable[ConnectivityMatrix], atlas: nib.Nifti1Image
 ) -> tuple[List[np.ndarray], np.ndarray]:
@@ -129,7 +157,7 @@ def extract_gradients(
     - ind_aligned_gradient (np.array): The aligned individual gradients.
     - group_gradients (np.array): The group-level gradients.
     """
-    # Path to the repo root (assuming this script is inside wonkyconn/)
+
     repo_root = Path(__file__).resolve().parent.parent
 
     path_gradients = repo_root / "data" / "gradients"
@@ -137,32 +165,21 @@ def extract_gradients(
 
     # Load all group gradient maps
     gradient_files = sorted(glob.glob(str(path_gradients / "templates" / "gradient*_cortical_subcortical.nii.gz")))
-
+    gradient_imgs = [nib.load(fname) for fname in gradient_files]
     gradients = []
-    for connectivity_matrix in connectivity_matrices:
-        # Remove NaN from matrix
-        matrix = np.asarray(connectivity_matrix.load(), dtype=np.float64)
-        conn_clean, kept_idx = remove_nan_from_matrix(matrix)
 
-        atlas_mask_without_nan, _ = remove_nan_roi_atlas(atlas, kept_idx)
-        masked_atlas = overlapping_atlas_with_mask(atlas_mask_without_nan, gradient_mask)
-        masked_matrix = clean_matrix_from_atlas(conn_clean, masked_atlas)
+    # Convert to list to allow multiple passes if needed
+    connectivity_matrices_list = list(connectivity_matrices)
 
-        masker = NiftiLabelsMasker(labels_img=masked_atlas, mask_img=gradient_mask)
+    # Parallel processing
+    n_jobs = -1  # Use all available cores
+    results = Parallel(n_jobs=n_jobs, verbose=10)(
+        delayed(process_single_matrix)(cm, nib.load(atlas), gradient_mask, gradient_imgs) for cm in connectivity_matrices_list
+    )
 
-        group_gradients = []
-        for fname in gradient_files:
-            grad_img = nib.load(fname)
-            grad_vals = masker.fit_transform(grad_img)  # shape (1, n_regions)
-            group_gradients.append(grad_vals.squeeze())
-
-        group_gradients_np = np.vstack(group_gradients).T  # shape (n_regions, n_components)
-
-        # Compute individual gradients
-        gm = GradientMaps(n_components=5, alignment="procrustes", kernel="normalized_angle")
-        ind_gradient = gm.fit(masked_matrix, reference=group_gradients_np)
-
-        gradients.append(ind_gradient.aligned_)
+    # Separate gradients and group_gradients
+    gradients = [r[0] for r in results]
+    group_gradients_np = results[0][1]  # All should be the same, so take first
 
     return gradients, group_gradients_np
 

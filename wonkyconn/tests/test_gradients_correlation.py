@@ -1,7 +1,6 @@
 import tempfile
 from pathlib import Path
 
-import nibabel as nib
 import numpy as np
 
 from wonkyconn.base import ConnectivityMatrix
@@ -42,11 +41,13 @@ def test_gradients():
     repo_root = Path(__file__).resolve().parent.parent
 
     path = repo_root / "data" / "gradients"
-    atlas = nib.load(str(path / "atlas" / "atlas-Schaefer2018Combined_dseg.nii.gz"))
+    atlas_file = str(path / "atlas" / "atlas-Schaefer2018Combined_dseg.nii.gz")
 
     connectivity_matrices = create_fake_connectivity(n_regions=434, n_subjects=3)
 
-    random_gradient, group_gradients = calculate_gradients_correlation.extract_gradients(connectivity_matrices, atlas=atlas)
+    random_gradient, group_gradients = calculate_gradients_correlation.extract_gradients(
+        connectivity_matrices, atlas=atlas_file
+    )
 
     # Calculate similarity for random gradient
     random_similarity = calculate_gradients_correlation.calculate_gradients_similarity(random_gradient, group_gradients)
