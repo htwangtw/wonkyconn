@@ -143,7 +143,7 @@ def process_single_matrix(
 
 
 def extract_gradients(
-    connectivity_matrices: Iterable[ConnectivityMatrix], atlas: nib.Nifti1Image
+    connectivity_matrices: Iterable[ConnectivityMatrix], atlas: nib.Nifti1Image, n_jobs: int = 4
 ) -> tuple[List[np.ndarray], np.ndarray]:
     """
     Calculate the gradients for each individual and load group-level gradients
@@ -172,7 +172,6 @@ def extract_gradients(
     connectivity_matrices_list = list(connectivity_matrices)
 
     # Parallel processing
-    n_jobs = -1  # Use all available cores
     results = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(process_single_matrix)(cm, nib.load(atlas), gradient_mask, gradient_imgs) for cm in connectivity_matrices_list
     )
