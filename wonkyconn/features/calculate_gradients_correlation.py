@@ -14,6 +14,22 @@ from ..base import ConnectivityMatrix
 
 
 def remove_nan_from_matrix(matrix: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Remove rows/columns from a connectivity matrix that contain NaN values.
+
+    Parameters
+    ----------
+    matrix : np.ndarray
+        Square connectivity matrix.
+
+    Returns
+    -------
+    np.ndarray
+        Cleaned connectivity matrix with NaN rows/columns removed.
+    np.ndarray
+        Indices of the kept rows/columns.
+    """
+
     col_mask = ~np.all(np.isnan(matrix), axis=0)
 
     kept_idx = np.where(col_mask)[0]
@@ -121,6 +137,28 @@ def process_single_matrix(
     gradient_mask: nib.Nifti1Image,
     gradient_imgs: List[nib.Nifti1Image],
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Process a single connectivity matrix to compute its gradients aligned to group gradients.
+
+    Parameters
+    ----------
+    connectivity_matrix : ConnectivityMatrix
+        The connectivity matrix to process.
+    atlas : nib.Nifti1Image
+        The atlas NIfTI image.
+    gradient_mask : nib.Nifti1Image
+        The group gradient mask NIfTI image.
+    gradient_imgs : List[nib.Nifti1Image]
+        List of group gradient NIfTI images.
+
+    Returns
+    -------
+    Tuple[np.ndarray, np.ndarray]
+        A tuple containing:
+        - The individual gradients aligned to group gradients.
+        - The group gradients as a NumPy array.
+    """
+
     matrix = np.asarray(connectivity_matrix.load(), dtype=np.float64)
     conn_clean, kept_idx = remove_nan_from_matrix(matrix)
     atlas_mask_without_nan, _ = remove_nan_roi_atlas(atlas, kept_idx)
@@ -151,6 +189,15 @@ def extract_gradients(
     Calculate the gradients for each individual and load group-level gradients
     for alignment.
 
+    Parameters
+    ----------
+    connectivity_matrices : Iterable[ConnectivityMatrix]
+        List of connectivity matrices to process.
+    atlas : nib.Nifti1Image
+        The atlas NIfTI image.
+    n_jobs : int, optional
+        Number of parallel jobs to use. Default is 4.
+
     Returns
     -------
     gradients : list[np.ndarray]
@@ -168,12 +215,9 @@ def extract_gradients(
     gradient_files = sorted(glob.glob(str(path_gradients / "templates" / "gradient*_cortical_subcortical.nii.gz")))
     gradient_imgs = [nib.load(fname) for fname in gradient_files]
 
-    # Materialize input (needed for repeated processing)
-    connectivity_matrices_list = list(connectivity_matrices)
-
     # Parallel processing
     results = Parallel(n_jobs=n_jobs, verbose=10)(
-        delayed(process_single_matrix)(cm, atlas, gradient_mask, gradient_imgs) for cm in connectivity_matrices_list
+        delayed(process_single_matrix)(cm, atlas, gradient_mask, gradient_imgs) for cm in connectivity_matrices
     )
 
     # Each result is (gradients_i, group_gradients_i)
