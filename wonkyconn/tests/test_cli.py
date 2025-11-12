@@ -119,9 +119,8 @@ def test_giga_connectome(data_path: Path, tmp_path: Path):
 
 @pytest.mark.smoke
 def test_halfpipe(data_path: Path, tmp_path: Path):
-    data_path = Path("/Users/claraelkhantour/Downloads/wonkyconn/data")
     bids_dir = data_path / "halfpipe"
-    # dl.get(str(bids_dir))
+    dl.get(str(bids_dir))
 
     index = BIDSIndex()
     index.put(bids_dir)
