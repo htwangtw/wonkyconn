@@ -131,7 +131,7 @@ def test_halfpipe(data_path: Path, tmp_path: Path):
     phenotypes_path = bids_dir / "participants.tsv"
 
     atlas_path = data_path / "atlases"
-    # dl.get(str(atlas_path))
+    dl.get(str(atlas_path))
 
     atlas_args: list[str] = list()
     atlas_args.append("--atlas")
