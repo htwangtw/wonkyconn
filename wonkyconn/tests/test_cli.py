@@ -4,6 +4,7 @@ Simple code to smoke test the functionality.
 
 import json
 import re
+import shutil
 from pathlib import Path
 from shutil import copyfile
 
@@ -118,8 +119,9 @@ def test_giga_connectome(data_path: Path, tmp_path: Path):
 
 @pytest.mark.smoke
 def test_halfpipe(data_path: Path, tmp_path: Path):
+    data_path = Path("/Users/claraelkhantour/Downloads/wonkyconn/data")
     bids_dir = data_path / "halfpipe"
-    dl.get(str(bids_dir))
+    # dl.get(str(bids_dir))
 
     index = BIDSIndex()
     index.put(bids_dir)
@@ -130,7 +132,7 @@ def test_halfpipe(data_path: Path, tmp_path: Path):
     phenotypes_path = bids_dir / "participants.tsv"
 
     atlas_path = data_path / "atlases"
-    dl.get(str(atlas_path))
+    # dl.get(str(atlas_path))
 
     atlas_args: list[str] = list()
     atlas_args.append("--atlas")
@@ -150,6 +152,12 @@ def test_halfpipe(data_path: Path, tmp_path: Path):
 
     args = parser.parse_args(argv)
     workflow(args)
+
+    # Add persistent storage to extract figure as artifact
+    persistent_dir = Path("figures_artifacts")
+    persistent_dir.mkdir(exist_ok=True)
+    fig_file = output_dir / "metrics.png"
+    shutil.copy(fig_file, persistent_dir / fig_file.name)
 
     assert (output_dir / "metrics.tsv").is_file()
     assert (output_dir / "metrics.png").is_file()
