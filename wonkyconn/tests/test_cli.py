@@ -4,6 +4,7 @@ Simple code to smoke test the functionality.
 
 import json
 import re
+import shutil
 from pathlib import Path
 from shutil import copyfile
 
@@ -150,6 +151,12 @@ def test_halfpipe(data_path: Path, tmp_path: Path):
 
     args = parser.parse_args(argv)
     workflow(args)
+
+    # Add persistent storage to extract figure as artifact
+    persistent_dir = Path("figures_artifacts")
+    persistent_dir.mkdir(exist_ok=True)
+    fig_file = output_dir / "metrics.png"
+    shutil.copy(fig_file, persistent_dir / fig_file.name)
 
     assert (output_dir / "metrics.tsv").is_file()
     assert (output_dir / "metrics.png").is_file()

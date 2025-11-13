@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 
 sns.set_palette("colorblind")
-palette = sns.color_palette(n_colors=7)
+palette = sns.color_palette(n_colors=10)
 
 matplotlib.rcParams["font.family"] = "DejaVu Sans"
 
@@ -49,7 +49,7 @@ def plot(result_frame: pd.DataFrame, group_by: list[str], output_dir: Path) -> N
 
     figure, axes_array = plt.subplots(
         nrows=1,
-        ncols=6,
+        ncols=7,
         figsize=(26, 4),
         constrained_layout=True,
         sharey=True,
@@ -61,6 +61,7 @@ def plot(result_frame: pd.DataFrame, group_by: list[str], output_dir: Path) -> N
         percentage_significant_qcfc_axes,
         distance_dependence_axes,
         gcor_axes,
+        gradients_axes,
         degrees_of_freedom_loss_axes,
         legend_axes,
     ) = axes_array
@@ -84,6 +85,10 @@ def plot(result_frame: pd.DataFrame, group_by: list[str], output_dir: Path) -> N
     sns.barplot(y=group_labels, x=data_frame.gcor, color=palette[3], ax=gcor_axes)
     gcor_axes.set_title("Global correlation (GCOR)")
     gcor_axes.set_xlabel("Mean correlation")
+
+    sns.barplot(y=group_labels, x=data_frame.gradients_similarity, color=palette[7], ax=gradients_axes)
+    gradients_axes.set_title("Gradient similarity")
+    gradients_axes.set_xlabel("Mean similarity (Spearman's $\\rho$)")
 
     plot_degrees_of_freedom_loss(
         data_frame,
