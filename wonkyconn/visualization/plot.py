@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 
 sns.set_palette("colorblind")
-palette = sns.color_palette(n_colors=7)
+palette = sns.color_palette(n_colors=10)
 
 matplotlib.rcParams["font.family"] = "DejaVu Sans"
 
@@ -86,7 +86,7 @@ def plot(result_frame: pd.DataFrame, group_by: list[str], output_dir: Path) -> N
     gcor_axes.set_title("Global correlation (GCOR)")
     gcor_axes.set_xlabel("Mean correlation")
 
-    sns.barplot(y=group_labels, x=data_frame.gradients_similarity, color=palette[5], ax=gradients_axes)
+    sns.barplot(y=group_labels, x=data_frame.gradients_similarity, color=palette[7], ax=gradients_axes)
     gradients_axes.set_title("Gradient similarity")
     gradients_axes.set_xlabel("Mean similarity (Spearman's $\\rho$)")
 
