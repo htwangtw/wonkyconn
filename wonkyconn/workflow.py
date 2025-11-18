@@ -124,6 +124,7 @@ def workflow(args: argparse.Namespace) -> None:
             data_frame,
             connectivity_matrices,
             distance_matrices,
+            region_memberships,
             metric_key,
             seg_key,
             atlases,
