@@ -77,8 +77,8 @@ def single_subject_within_network_connectivity(
         subj_corr_wtih_network.append(correlation_with_given_network[1, 0])
 
     # summarise of the given subject
-    subj_average_connectivity_within_network = np.asarray(subj_average_connectivity_within_network).mean()
-    subj_variance_connectivity_within_network = np.asarray(subj_variance_connectivity_within_network).mean()
+    subj_average_connectivity_within_network = np.asarray(subj_average_connectivity_within_network).mean(axis=0)
+    subj_variance_connectivity_within_network = np.asarray(subj_variance_connectivity_within_network).mean(axis=0)
     return (
         subj_average_connectivity_within_network,
         subj_variance_connectivity_within_network,
