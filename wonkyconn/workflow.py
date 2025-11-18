@@ -18,6 +18,7 @@ from .base import ConnectivityMatrix
 from .features.calculate_degrees_of_freedom import (
     calculate_degrees_of_freedom_loss,
 )
+from .features.calculate_gradients_correlation import calculate_gradients_similarity, extract_gradients
 from .features.distance_dependence import calculate_distance_dependence
 from .features.gcor import calculate_gcor
 from .features.network import network_similarity
@@ -118,9 +119,14 @@ def workflow(args: argparse.Namespace) -> None:
 
     records: list[dict[str, Any]] = list()
     for key, connectivity_matrices in tqdm(grouped_connectivity_matrix.items(), unit="groups"):
-        gc_log.debug(f"Processing {key}")
         record = make_record(
-            index, data_frame, connectivity_matrices, distance_matrices, region_memberships, metric_key, seg_key
+            index,
+            data_frame,
+            connectivity_matrices,
+            distance_matrices,
+            metric_key,
+            seg_key,
+            atlases,
         )
         record.update(dict(zip(group_by, key, strict=False)))
         records.append(record)
@@ -139,6 +145,7 @@ def make_record(
     region_memberships: dict[str, pd.DataFrame],
     metric_key: str,
     seg_key: str,
+    atlases: dict[str, Atlas],
 ) -> dict[str, Any]:
     # seann: added sub- tag when looking up subjects only if sub- is not already present
     seg_subjects: list[str] = list()
@@ -169,6 +176,8 @@ def make_record(
     gcor = calculate_gcor(connectivity_matrices)
 
     dmn_similarity, t_stats_dmn_vis_fpn = network_similarity(connectivity_matrices, region_memberships[seg])
+    atlas = atlases[seg].image
+    gradients, gradients_group = extract_gradients(connectivity_matrices, atlas)
 
     record = dict(
         median_absolute_qcfc=calculate_median_absolute(qcfc.correlation),
@@ -177,6 +186,7 @@ def make_record(
         gcor=gcor,
         dmn_similarity=dmn_similarity,
         dmn_vis_distance_vs_dmn_fpn=t_stats_dmn_vis_fpn,
+        gradients_similarity=calculate_gradients_similarity(gradients, gradients_group),
         **calculate_degrees_of_freedom_loss(connectivity_matrices)._asdict(),
     )
 
