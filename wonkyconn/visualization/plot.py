@@ -11,7 +11,7 @@ from matplotlib.axes import Axes
 
 sns.set_palette("colorblind")
 
-palette = sns.color_palette(n_colors=10)
+palette = sns.color_palette(n_colors=13)
 
 matplotlib.rcParams["font.family"] = "DejaVu Sans"
 
@@ -31,18 +31,26 @@ def _make_group_label(group_by: list[str], values: str | Sequence[str]) -> str:
 
 def plot(result_frame: pd.DataFrame, group_by: list[str], output_dir: Path) -> None:
     """
-    Plot all three metrics based on the given result data frame.
+    Plot summary metrics based on the given result data frame.
 
     Args:
-        result_frame (pd.DataFrame): The DataFrame containing the the columns "median_absolute_qcfc",
-            "percentage_significant_qcfc", "distance_dependence", "confound_regression_percentage",
-            "motion_scrubbing_percentage", and "nonsteady_states_detector_percentage", and the
-            columns in the `group_by` variable.
+        result_frame (pd.DataFrame): Must contain columns:
+            - median_absolute_qcfc
+            - percentage_significant_qcfc
+            - distance_dependence
+            - gcor
+            - dmn_similarity
+            - dmn_vis_distance_vs_dmn_fpn
+            - gradients_similarity
+            - confound_regression_percentage
+            - motion_scrubbing_percentage
+            - nonsteady_states_detector_percentage
+            - sex_auc
+            - age_mae
+
+            plus the columns listed in group_by (used as index).
         group_by (list[str]): The list of columns that the results are grouped by.
         output_dir (Path): The directory to save the plot image into as "metrics.png".
-
-    Returns:
-        None
     """
     # seann: added type for series
     group_labels: "pd.Series[str]" = pd.Series(result_frame.index.map(partial(_make_group_label, group_by)))
@@ -50,8 +58,8 @@ def plot(result_frame: pd.DataFrame, group_by: list[str], output_dir: Path) -> N
 
     figure, axes_array = plt.subplots(
         nrows=1,
-        ncols=9,
-        figsize=(26, 4),
+        ncols=11,
+        figsize=(36, 4),
         constrained_layout=True,
         sharey=True,
         dpi=300,
@@ -65,6 +73,8 @@ def plot(result_frame: pd.DataFrame, group_by: list[str], output_dir: Path) -> N
         dmn_axes,
         modular_dist_axes,
         gradients_axes,
+        sex_auc_axes,
+        age_mae_axes,
         degrees_of_freedom_loss_axes,
         legend_axes,
     ) = axes_array
@@ -77,7 +87,7 @@ def plot(result_frame: pd.DataFrame, group_by: list[str], output_dir: Path) -> N
     sns.barplot(
         y=group_labels, x=data_frame.percentage_significant_qcfc, color=palette[1], ax=percentage_significant_qcfc_axes
     )
-    percentage_significant_qcfc_axes.set_title("Percentage of significant QC-FC correlations")
+    percentage_significant_qcfc_axes.set_title("% significant QC–FC edges")
     percentage_significant_qcfc_axes.set_xlabel("Percentage %")
 
     sns.barplot(y=group_labels, x=data_frame.distance_dependence, color=palette[2], ax=distance_dependence_axes)
@@ -96,16 +106,47 @@ def plot(result_frame: pd.DataFrame, group_by: list[str], output_dir: Path) -> N
     sns.barplot(y=group_labels, x=data_frame.dmn_vis_distance_vs_dmn_fpn, color=palette[5], ax=modular_dist_axes)
     modular_dist_axes.set_title("Differences between\nDMN-FPN vs DMN-visual")
     modular_dist_axes.set_xlabel("Mean t-vlaue")
-    sns.barplot(y=group_labels, x=data_frame.gradients_similarity, color=palette[7], ax=gradients_axes)
+
+    sns.barplot(y=group_labels, x=data_frame.gradients_similarity, color=palette[6], ax=gradients_axes)
     gradients_axes.set_title("Gradient similarity")
     gradients_axes.set_xlabel("Mean similarity (Spearman's $\\rho$)")
+
+    # --- Sex prediction (AUC) with errorbar (std)
+    if "sex_auc" in data_frame.columns:
+        sex_auc_axes.barh(
+            y=group_labels,
+            width=data_frame.sex_auc,
+            xerr=data_frame.sex_auc_std,
+            color=palette[8],
+            ecolor="black",
+            capsize=3,
+        )
+        sex_auc_axes.set_title("Sex prediction (AUC)")
+        sex_auc_axes.set_xlabel("AUC (ROC)")
+    else:
+        sex_auc_axes.set_visible(False)
+
+    # --- Age prediction (MAE) with errorbar (std)
+    if "age_mae" in data_frame.columns:
+        age_mae_axes.barh(
+            y=group_labels,
+            width=data_frame.age_mae,
+            xerr=data_frame.age_mae_std,
+            color=palette[9],
+            ecolor="black",
+            capsize=3,
+        )
+        age_mae_axes.set_title("Age prediction (MAE)")
+        age_mae_axes.set_xlabel("MAE (years)")
+    else:
+        age_mae_axes.set_visible(False)
 
     plot_degrees_of_freedom_loss(
         data_frame,
         group_labels,
         degrees_of_freedom_loss_axes,
         legend_axes,
-        [palette[6], palette[7], palette[8]],
+        [palette[10], palette[11], palette[12]],
     )
 
     figure.savefig(output_dir / "metrics.png")
@@ -136,7 +177,8 @@ def plot_degrees_of_freedom_loss(
         color=colors[2],
         ax=degrees_of_freedom_loss_axes,
     )
-    degrees_of_freedom_loss_axes.set_title("Percentage of degrees of freedom lost")
+
+    degrees_of_freedom_loss_axes.set_title("Percentage of DoF lost")
     degrees_of_freedom_loss_axes.set_xlabel("Percentage %")
     labels = ["Confounds regression", "Motion scrubbing", "Non-steady states detector"]
     handles = [mpatches.Patch(color=c, label=label) for c, label in zip(colors, labels, strict=False)]

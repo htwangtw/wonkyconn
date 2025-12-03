@@ -15,6 +15,7 @@ from tqdm.auto import tqdm
 
 from .atlas import Atlas
 from .base import ConnectivityMatrix
+from .features.age_sex_prediction import age_sex_scores
 from .features.calculate_degrees_of_freedom import (
     calculate_degrees_of_freedom_loss,
 )
@@ -71,7 +72,7 @@ def workflow(args: argparse.Namespace) -> None:
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load data frame
+    # Load data frame (participants: age, gender, etc.)
     data_frame = load_data_frame(args)
 
     # Load atlases
@@ -167,6 +168,7 @@ def make_record(
 
         raise ValueError(f"Subject {sub} not found in participants file")
 
+    # Slice phenotypes (age, gender, etc.) for just this group
     seg_data_frame = data_frame.loc[seg_subjects]
     qcfc = calculate_qcfc(seg_data_frame, connectivity_matrices, metric_key)
 
@@ -190,6 +192,48 @@ def make_record(
         gradients_similarity=calculate_gradients_similarity(gradients, gradients_group),
         **calculate_degrees_of_freedom_loss(connectivity_matrices)._asdict(),
     )
+
+    # age / sex predictability metrics
+    try:
+        ages = seg_data_frame["age"].to_numpy()
+        genders = seg_data_frame["gender"].to_numpy()
+
+        scores = age_sex_scores(
+            connectivity_matrices,
+            ages=ages,
+            genders=genders,
+            n_splits=100,
+            random_state=42,
+            n_pca=100,
+            n_jobs=4,
+            clf_model="logreg",  # logistic regression for sex
+            reg_model="ridge",  # ridge regression for age
+        )
+
+        # scores is:
+        # {
+        #   "sex_auc": float,
+        #   "sex_auc_std": float,
+        #   "sex_accuracy": float,
+        #   "age_mae": float,
+        #   "age_mae_std": float,
+        #   "age_r2": float,
+        # }
+        record.update(scores)
+
+    except Exception as exc:
+        gc_log.warning(f"[age_sex_prediction] Skipping age/sex prediction for this group due to error: {exc!r}")
+        # If it fails, we still want consistent columns in the output.
+        record.update(
+            dict(
+                sex_auc=np.nan,
+                sex_auc_std=np.nan,
+                sex_accuracy=np.nan,
+                age_mae=np.nan,
+                age_mae_std=np.nan,
+                age_r2=np.nan,
+            )
+        )
 
     return record
 
